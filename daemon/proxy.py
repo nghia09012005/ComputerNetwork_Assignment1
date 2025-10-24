@@ -99,13 +99,21 @@ def resolve_routing_policy(hostname, routes):
         if len(proxy_map) == 0:
             print("[Proxy] Emtpy resolved routing of hostname {}".format(hostname))
             print ("Empty proxy_map result")
+
             # TODO: implement the error handling for non mapped host
             #       the policy is design by team, but it can be 
             #       basic default host in your self-defined system
             # Use a dummy host to raise an invalid connection
+
+
+            # Sử dụng localhost:9000 làm cấu hình mặc định
             proxy_host = '127.0.0.1'
             proxy_port = '9000'
-        elif len(value) == 1:
+            # Ghi log thông tin
+            print(f"[INFO] Forwarding to default backend: {proxy_host}:{proxy_port}")
+            return proxy_host, int(proxy_port)
+
+        elif len(proxy_map) == 1:
             proxy_host, proxy_port = proxy_map[0].split(":", 2)
         #elif: # apply the policy handling 
         #   proxy_map
@@ -199,6 +207,15 @@ def run_proxy(ip, port, routes):
             #        using multi-thread programming with the
             #        provided handle_client routine
             #
+
+            # Tạo một thread mới cho mỗi kết nối
+            client_thread = threading.Thread(
+                target=handle_client,  # Hàm sẽ chạy trong thread mới
+                args=(ip, port, conn, addr, routes),  # Các tham số truyền vào hàm
+                daemon=True  # Thread sẽ tự động kết thúc khi chương trình chính kết thúc
+            )
+            client_thread.start()  # Bắt đầu thread
+
     except socket.error as e:
       print("Socket error: {}".format(e))
 

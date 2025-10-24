@@ -119,7 +119,11 @@ class Response():
         self.request = None
 
 
-    def get_mime_type(self, path):
+    def get_mime_type(self, path): # content-type là super-set của mime-type (contetn-type > mime type)
+
+        # e.g mime-type: text/html, content-type: text/html; charset=utf-8 
+        
+
         """
         Determines the MIME type of a file based on its path.
 
@@ -133,6 +137,8 @@ class Response():
         except Exception:
             return 'application/octet-stream'
         return mime_type or 'application/octet-stream'
+
+
 
 
     def prepare_content_type(self, mime_type='text/html'):
@@ -149,6 +155,12 @@ class Response():
         
         base_dir = ""
 
+        # Xác định file lấy dựa trên mime_type 
+        # e.g: mime_type: text/html -> base_dir = BASE_DIR+"www/"
+        #      mime_type: image/png -> base_dir = BASE_DIR+"static/"
+        #      mime_type: application/json -> base_dir = BASE_DIR+"apps/"
+
+
         # Processing mime_type based on main_type and sub_type
         main_type, sub_type = mime_type.split('/', 1)
         print("[Response] processing MIME main_type={} sub_type={}".format(main_type,sub_type))
@@ -158,11 +170,13 @@ class Response():
                 base_dir = BASE_DIR+"static/"
             elif sub_type == 'html':
                 base_dir = BASE_DIR+"www/"
-            else:
-                handle_text_other(sub_type)
+            # else:
+            #     handle_text_other(sub_type)   ?????
+
         elif main_type == 'image':
             base_dir = BASE_DIR+"static/"
             self.headers['Content-Type']='image/{}'.format(sub_type)
+
         elif main_type == 'application':
             base_dir = BASE_DIR+"apps/"
             self.headers['Content-Type']='application/{}'.format(sub_type)
@@ -178,8 +192,17 @@ class Response():
         #        video/mpeg
         #        ...
         #
+        elif main_type == 'video':
+            base_dir = BASE_DIR+"static/"
+            self.headers['Content-Type']='video/{}'.format(sub_type)
+
+        elif main_type == 'audio':
+            base_dir = BASE_DIR+"static/"
+            self.headers['Content-Type']='audio/{}'.format(sub_type)    
+        
+    
         else:
-            raise ValueError("Invalid MEME type: main_type={} sub_type={}".format(main_type,sub_type))
+            raise ValueError("Invalid MIME type: main_type={} sub_type={}".format(main_type,sub_type))
 
         return base_dir
 
@@ -194,17 +217,23 @@ class Response():
         :rtype tuple: (int, bytes) representing content length and content data.
         """
 
-        filepath = os.path.join(base_dir, path.lstrip('/'))
+        filepath = os.path.join(base_dir, path.lstrip('/')) # path tới file cần lấy
 
         print("[Response] serving the object at location {}".format(filepath))
             #
             #  TODO: implement the step of fetch the object file
             #        store in the return value of content
             #
+        if not os.path.exists(filepath):
+            return 0, b''
+        
+        with open(filepath, 'rb') as f:
+            content = f.read()
+        
         return len(content), content
 
 
-    def build_response_header(self, request):
+    def build_response_header(self, request): # kết hợp header request để set các trường bắt buộc
         """
         Constructs the HTTP response headers based on the class:`Request <Request>
         and internal attributes.
@@ -213,8 +242,8 @@ class Response():
 
         :rtypes bytes: encoded HTTP response header.
         """
-        reqhdr = request.headers
-        rsphdr = self.headers
+        reqhdr = request.headers # request header
+        rsphdr = self.headers # response header
 
         #Build dynamic headers
         headers = {
@@ -225,6 +254,7 @@ class Response():
                 "Content-Type": "{}".format(self.headers['Content-Type']),
                 "Content-Length": "{}".format(len(self._content)),
 #                "Cookie": "{}".format(reqhdr.get("Cookie", "sessionid=xyz789")), #dummy cooki
+
         #
         # TODO prepare the request authentication
         #
@@ -242,10 +272,34 @@ class Response():
             #  TODO: implement the header building to create formated
             #        header from the provied headers
             #
-        #
+            
+            # build header cho response theo các trường request gửi 
+        
+        # Set cookie muốn gửi từ backend
+        if self.cookies:
+            cookie_str = "; ".join(f"{k}={v}" for k, v in self.cookies.items())
+            headers["Set-Cookie"] = cookie_str
+
+
+        header_lines = [f"HTTP/{request.version} {self.status_code} {self.reason}"] 
+
+        # header từ request giữ lại
+        for k, v in headers.items():  
+            header_lines.append(f"{k}: {v}")
+
+        # header từ response muốn set
+        for k, v in rsphdr.items():  
+            header_lines.append(f"{k}: {v}")
+
+        header_lines.append("\r\n")  # thêm xuông dòng ngăn cách với body
+        
+        fmt_header = "\r\n".join(header_lines)
+
+        # SẼ ĐƯỢC SET Ở BACKEND KHI VALID USERNAME VÀ PASSWORD XONG 
         # TODO prepare the request authentication
         #
 	# self.auth = ...
+
         return str(fmt_header).encode('utf-8')
 
 
@@ -292,6 +346,15 @@ class Response():
         #
         # TODO: add support objects
         #
+        elif mime_type == 'image/png':
+            base_dir = self.prepare_content_type(mime_type = 'image/png')
+        elif mime_type == 'video/mp4':
+            base_dir = self.prepare_content_type(mime_type = 'video/mp4')
+        elif mime_type == 'audio/wav':
+            base_dir = self.prepare_content_type(mime_type = 'audio/wav')
+        elif mime_type == 'application/json':
+            base_dir = self.prepare_content_type(mime_type = 'application/json')
+              
         else:
             return self.build_notfound()
 
